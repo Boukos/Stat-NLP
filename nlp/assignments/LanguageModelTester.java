@@ -11,6 +11,7 @@ import java.text.DecimalFormat;
 
 import nlp.langmodel.LanguageModel;
 import nlp.util.CommandLineUtils;
+import nlp.util.Counter;
 
 /**
  * This is the main harness for assignment 1.  To run this harness, use
@@ -141,8 +142,9 @@ public class LanguageModelTester {
     double logProbability = 0.0;
     double numSymbols = 0.0;
     for (List<String> sentence : sentenceCollection) {
-      logProbability += Math.log(languageModel.getSentenceProbability(sentence)) / Math.log(2.0);
+      logProbability += languageModel.getSentenceProbability(sentence);
       numSymbols += sentence.size();
+      //System.out.println(languageModel.getSentenceProbability(sentence));
     }
     double avgLogProbability = logProbability / numSymbols;
     double perplexity = Math.pow(0.5, avgLogProbability);
@@ -258,7 +260,7 @@ public class LanguageModelTester {
     return correctSentences;
   }
 
-  static Set extractVocabulary(Collection<List<String>> sentenceCollection) {
+  static Set<String> extractVocabulary(Collection<List<String>> sentenceCollection) {
     Set<String> vocabulary = new HashSet<String>();
     for (List<String> sentence : sentenceCollection) {
       for (String word : sentence) {
@@ -307,9 +309,9 @@ public class LanguageModelTester {
     Collection<List<String>> trainingSentenceCollection = SentenceCollection.Reader.readSentenceCollection(basePath + trainingSentencesFile);
     Collection<List<String>> validationSentenceCollection = SentenceCollection.Reader.readSentenceCollection(basePath + validationSentencesFile);
     Collection<List<String>> testSentenceCollection = SentenceCollection.Reader.readSentenceCollection(basePath + testSentencesFile);
-    Set trainingVocabulary = extractVocabulary(trainingSentenceCollection);
+    Set<String> trainingVocabulary = extractVocabulary(trainingSentenceCollection);
     List<SpeechNBestList> speechNBestLists = SpeechNBestList.Reader.readSpeechNBestLists(basePath + speechNBestListsPath, trainingVocabulary);
-
+    
     // Build the language model
     LanguageModel languageModel = null;
     if (model.equalsIgnoreCase("baseline")) {
@@ -317,7 +319,7 @@ public class LanguageModelTester {
     } else if (model.equalsIgnoreCase("bigram")) {
       languageModel = new UnsmoothedBigramLanguageModel(trainingSentenceCollection);
     } else if (model.equalsIgnoreCase("kn_bigram")) {
-      languageModel = new KN_BigramLanguageModel(trainingSentenceCollection);
+      languageModel = new KN_BigramLanguageModel(trainingSentenceCollection, trainingVocabulary, validationSentenceCollection);
     } else {
       throw new RuntimeException("Unknown model descriptor: " + model);
     }
@@ -333,16 +335,16 @@ public class LanguageModelTester {
     System.out.println("  Avg Path:   " + calculateWordErrorRateRandomChoice(speechNBestLists));
     double wordErrorRate = calculateWordErrorRate(languageModel, speechNBestLists, verbose);
     System.out.println("HUB Word Error Rate: " + wordErrorRate);
-
-/*    double uPmakes = ((UnsmoothedBigramLanguageModel) languageModel).unigramProb("makes");
-    double sample = Math.random() * uPmakes;
-    double sum = 0.0;
-    System.out.println("uPmakes:  "+uPmakes+",  sample:  "+sample);
-    for (String word2 : ((UnsmoothedBigramLanguageModel) languageModel).unigramCounter.keySet()) {
-    	double cBP = ((UnsmoothedBigramLanguageModel) languageModel).condBigramProb("makes", word2);
-      sum += cBP;
-      if (cBP > 0.4 * uPmakes){ System.out.println(word2+" cBP:  "+cBP+",  sum:  "+sum); }
-    }*/
+    
+//    System.out.println("Word Tests:");
+//    List<String> testwords = trainingSentenceCollection.iterator().next();
+//    testwords.add("UNK");
+//    
+//    for (String word : testwords){
+//    	System.out.println(word);
+//    	
+//
+//    }
     
     System.out.println("Generated Sentences:");
     for (int i = 0; i < 10; i++) {
