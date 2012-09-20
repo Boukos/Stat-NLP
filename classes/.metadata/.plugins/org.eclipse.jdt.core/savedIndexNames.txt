@@ -1,1 +1,0 @@
-INDEX VERSION 1.126+/Users/bumford/Desktop/petrov/code/.metadata/.plugins/org.eclipse.jdt.core

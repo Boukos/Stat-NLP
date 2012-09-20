@@ -10,60 +10,63 @@ import nlp.util.Counter;
 import nlp.util.CounterMap;
 
 /**
- * A Kneser-Ney smoothed language model using bigram counts
+ * A dummy language model -- uses empirical Bigram counts, plus a single
+ * ficticious count for unknown words.
  */
-class KN_BigramLanguageModel implements LanguageModel {
+class InterpolatedBigramLanguagemodel implements LanguageModel {
 
   static final String STOP = "</S>";
   static final String START = "<S>";
   
-  double singletonBicount = 0.0;
-  double doubletonBicount = 0.0;
-  double discount = 0.0;
+  double lambda = 0.6;
 
   double wordCount = 0.0;
   double vocabSize = 0.0;
+  double bigramCount = 0.0;
   double bigramVocabSize = 0.0;
   double sentenceCount = 0.0;
   
   CounterMap<String, String> bigramCounterMap = new CounterMap<String, String>();
-  CounterMap<String, String> reverseBigramCounterMap = new CounterMap<String, String>();
   
   public double unigramCount(String word) {
   	if (word.equals(STOP)) { return sentenceCount; }
   	else {
   		Counter<String> nextwords = bigramCounterMap.getCounter(word);
-  		if (nextwords.totalCount() == 0) { System.out.println("whoops: "+word); }
   		return nextwords.totalCount();
   	}
   }
   
-//  public double getUnigramProbability(List<String> sentence, int index) {
-//    String word = sentence.get(index);
-//    return unigramCount(word) / wordCount;
-//  }
-//  
-  public double norm(String token) {
+  public double unigramProb(String token) {
   	double tokencount = unigramCount(token);
-  	return (discount / tokencount) * bigramCounterMap.getCounter(token).size();
+  	return tokencount / wordCount;
   }
   
-  public double p_cont(String word) {
-  	return reverseBigramCounterMap.getCounter(word).size() / bigramVocabSize;
+  public double getUnigramProbability(List<String> sentence, int index) {
+    String word = sentence.get(index);
+    return unigramProb(word);
+  }
+  
+  public double condBigramProb(String word1, String word2) {
+  	double bicount = bigramCounterMap.getCount(word1, word2);
+  	return bicount / unigramCount(word1);
+  }
+  
+  public double getCondBigramProbability(List<String> sentence, int index) {
+  	String word1 = sentence.get(index);
+  	String word2 = sentence.get(index+1);
+  	return condBigramProb(word1, word2);
   }
   
   public double p_interp(String word1, String word2) {
-  	double word1count = unigramCount(word1);
-  	double bicount = bigramCounterMap.getCount(word1, word2);
-    return (Math.max(bicount - discount, 0) / word1count) + (norm(word1) * p_cont(word2));
+  	double prob = (lambda * condBigramProb(word1, word2)) + ((1 - lambda) * unigramProb(word2));
+//  	if (((Double)prob).isNaN()) { System.out.println(word1+"-"+word2+"-"+word3+": "+prob); }
+  	return prob;
   }
   
   public double getP_interp(List<String> sentence, int index) {
   	String word1 = sentence.get(index);
   	String word2 = sentence.get(index+1);
-  	double prob = p_interp(word1, word2);
-  	if (((Double)prob).isNaN()) { System.out.println(word1+"-"+word2+": NaN"); }
-  	return prob;
+  	return p_interp(word1, word2);
   }
 
   public double getSentenceProbability(List<String> sentence) {
@@ -80,12 +83,11 @@ class KN_BigramLanguageModel implements LanguageModel {
   String generateNextWord(String word1) {
     double sample = Math.random();
     double sum = 0.0;
-  	Counter<String> nextwords = bigramCounterMap.getCounter(word1);
-		for (String word2 : nextwords.keySet()) {
-			sum += bigramCounterMap.getCount(word1, word2) / unigramCount(word1);
-			if (sum > sample) { return word2; }
-		}
-  	return word1+": nope";
+    for (String word2 : bigramCounterMap.keySet()) {
+      sum += bigramCounterMap.getCount(word1, word2) / unigramCount(word1);
+      if (sum > sample) { return word2; }
+    }
+    return "nope";
   }
 
   public List<String> generateSentence() {
@@ -98,7 +100,7 @@ class KN_BigramLanguageModel implements LanguageModel {
     return sentence;
   }
   
-  public KN_BigramLanguageModel(Collection<List<String>> trainingSet,	Collection<List<String>> validSet) {
+  public InterpolatedBigramLanguagemodel(Collection<List<String>> trainingSet,	Collection<List<String>> validSet) {
     for (List<String> sentence : trainingSet) {
       List<String> stoppedStartedSentence = new ArrayList<String>(sentence);
       stoppedStartedSentence.add(STOP);
@@ -107,7 +109,6 @@ class KN_BigramLanguageModel implements LanguageModel {
       	String token1 = stoppedStartedSentence.get(i);
       	String token2 = stoppedStartedSentence.get(i+1);
         bigramCounterMap.incrementCount(token1, token2, 1.0);
-        reverseBigramCounterMap.incrementCount(token2, token1, 1.0);
       }
     }
     
@@ -119,34 +120,18 @@ class KN_BigramLanguageModel implements LanguageModel {
       	String token1 = stoppedStartedSentence.get(i);
       	String token2 = stoppedStartedSentence.get(i+1);
         bigramCounterMap.incrementCount(token1, token2, 1.0);
-        reverseBigramCounterMap.incrementCount(token2, token1, 1.0);
       }
     }
-
+    
     wordCount = bigramCounterMap.totalCount() + sentenceCount;
     vocabSize = bigramCounterMap.size();
-    bigramVocabSize = bigramCounterMap.totalSize();
     sentenceCount = trainingSet.size() + validSet.size();
+    bigramCount = bigramCounterMap.totalCount();
+    bigramVocabSize = bigramCounterMap.totalSize();
     System.out.println("Wordcount:  "+wordCount);
     System.out.println("Vocabsize:  "+vocabSize);
+    System.out.println("Bigramcount:  "+bigramCount);
     System.out.println("BigramVocabsize:  "+bigramVocabSize);
     System.out.println("Sentencecount:  "+sentenceCount);
-    
-//    System.out.println("the cat:  " + bigramCounterMap.getCount("the", "cat"));
-//    System.out.println("a cat:  " + bigramCounterMap.getCount("a", "cat"));
-//    System.out.println("grade cat:  " + bigramCounterMap.getCount("grade", "cat"));
-//    System.out.println(reverseBigramCounterMap.getCounter("cat"));
-//    System.out.println( (.5 / 790463.0) * (reverseBigramCounterMap.getCounter("conscript").size() / bigramVocabSize) ) ;
-    
-    for (String word1 : bigramCounterMap.keySet()) {
-    	for (String word2 : bigramCounterMap.getCounter(word1).keySet()) {
-    		if (bigramCounterMap.getCount(word1, word2) == 1) { singletonBicount += 1; }
-    		else if (bigramCounterMap.getCount(word1, word2) == 2) { doubletonBicount += 1; }
-    	}
-    }
-    discount = singletonBicount / (singletonBicount + 2 * doubletonBicount);
-    System.out.println("singletonTricount: "+singletonBicount);
-    System.out.println("doubletonTricount: "+doubletonBicount);
-    System.out.println("discount: "+discount);  
   }
 }

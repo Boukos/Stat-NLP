@@ -9,5 +9,7 @@ import java.util.List;
 public interface LanguageModel {
 	double getSentenceProbability(List<String> sentence);
   List<String> generateSentence();
-//  double testNextWord(String word);
+//  double p_interp(String word1, String word2, String word3);
+//  double p_interp(String word1, String word2);
+//  double unigramProb(String word1);
 }

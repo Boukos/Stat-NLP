@@ -2,16 +2,19 @@ package nlp.assignments;
 
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.Writer;
 import java.util.*;
 import java.text.NumberFormat;
 import java.text.DecimalFormat;
 
 import nlp.langmodel.LanguageModel;
 import nlp.util.CommandLineUtils;
-import nlp.util.Counter;
 
 /**
  * This is the main harness for assignment 1.  To run this harness, use
@@ -117,7 +120,7 @@ public class LanguageModelTester {
 
     public int size() {
       int size = 0;
-      Iterator i = iterator();
+      Iterator<?> i = iterator();
       while (i.hasNext()) {
         size++;
         i.next();
@@ -137,14 +140,13 @@ public class LanguageModelTester {
 
   }
 
-
   static double calculatePerplexity(LanguageModel languageModel, Collection<List<String>> sentenceCollection) {
     double logProbability = 0.0;
     double numSymbols = 0.0;
     for (List<String> sentence : sentenceCollection) {
-      logProbability += languageModel.getSentenceProbability(sentence);
+      logProbability += Math.log(languageModel.getSentenceProbability(sentence)) / Math.log(2.0);
       numSymbols += sentence.size();
-      //System.out.println(languageModel.getSentenceProbability(sentence));
+//      System.out.println(languageModel.getSentenceProbability(sentence));
     }
     double avgLogProbability = logProbability / numSymbols;
     double perplexity = Math.pow(0.5, avgLogProbability);
@@ -269,7 +271,49 @@ public class LanguageModelTester {
     }
     return vocabulary;
   }
+  
+  static List<String> unkSent(List<String> sent, Set<String> voc, Writer op) throws IOException {
+  	for (int i=0; i < sent.size(); i++) {
+  		String wd = sent.get(i);
+  		if (!voc.contains(wd)) {
+  		  op.write("unking "+wd+"\n");
+  		  sent.set(i,"UNK");
+  		}
+  	}
+		op.write("unked sentence: "+sent+"\n");
+		return sent;
+  }
+  
+//  static void checkProbs(LanguageModel languageModel, Set<String> testWords, Set<String> vocab) {
+//  	for (String word1 : testWords) {
+//  		for (String word2 : testWords) {
+//  			double prob = 0.0;
+//  			for (String word3 : vocab) {
+//  				prob += languageModel.p_interp(word1, word2, word3);
+//  			}
+//  			System.out.println(word1+"-"+word2+": "+prob);
+//  		}
+//  	}
+//  }
+  
+//  static void checkProbs(LanguageModel languageModel, Set<String> testWords, Set<String> vocab) {
+//  	for (String word1 : testWords) {
+//			double prob = 0.0;
+//  		for (String word2 : vocab) {
+//  		  prob += languageModel.p_interp(word1, word2);
+//  		}
+//  		System.out.println(word1+": prob = "+prob);
+//  	}
+//  }
 
+//  static void checkProbs(LanguageModel languageModel, Set<String> vocab) {
+//  	double prob = 0.0;
+//  	for (String word1 : vocab) {
+//  		prob += languageModel.unigramProb(word1);
+//  	}
+//  	System.out.println("vocab: prob= "+prob);
+//  }
+  
   public static void main(String[] args) throws IOException {
     // Parse command line flags and arguments
     Map<String, String> argMap = CommandLineUtils.simpleCommandLineParser(args);
@@ -306,26 +350,58 @@ public class LanguageModelTester {
     String validationSentencesFile = "/treebank-sentences-spoken-validate.txt";
     String testSentencesFile = "/treebank-sentences-spoken-test.txt";
     String speechNBestListsPath = "/wsj_n_bst";
+    
     Collection<List<String>> trainingSentenceCollection = SentenceCollection.Reader.readSentenceCollection(basePath + trainingSentencesFile);
     Collection<List<String>> validationSentenceCollection = SentenceCollection.Reader.readSentenceCollection(basePath + validationSentencesFile);
     Collection<List<String>> testSentenceCollection = SentenceCollection.Reader.readSentenceCollection(basePath + testSentencesFile);
+    
     Set<String> trainingVocabulary = extractVocabulary(trainingSentenceCollection);
+    Set<String> unkstartstopVocabulary = new HashSet<String>(trainingVocabulary);
+    unkstartstopVocabulary.add("UNK");
+//    unkstartstopVocabulary.add("<S>");
+    unkstartstopVocabulary.add("</S>");
+    
     List<SpeechNBestList> speechNBestLists = SpeechNBestList.Reader.readSpeechNBestLists(basePath + speechNBestListsPath, trainingVocabulary);
+    
+    File logFile = new File ("/Users/bumford/Desktop/log.txt");
+    Writer output = new BufferedWriter(new FileWriter(logFile));
+    
+    Collection<List<String>> validSentences = new ArrayList<List<String>>();
+    Collection<List<String>> testSentences = new ArrayList<List<String>>();
+    
+    for (List<String> sentence : validationSentenceCollection) {
+    	List<String>unksent = unkSent(sentence, trainingVocabulary, output);
+    	validSentences.add(unksent);
+    }
+    for (List<String> sentence : testSentenceCollection) {
+    	List<String>unksent = unkSent(sentence, trainingVocabulary, output);
+    	testSentences.add(unksent);
+    }
+//    
+//    Iterator<List<String>> it = validSentences.iterator();
+//    for (int i=0; i < 20; i++) {
+//    	System.out.println(it.next());
+//    }
     
     // Build the language model
     LanguageModel languageModel = null;
     if (model.equalsIgnoreCase("baseline")) {
       languageModel = new EmpiricalUnigramLanguageModel(trainingSentenceCollection);
     } else if (model.equalsIgnoreCase("bigram")) {
-      languageModel = new UnsmoothedBigramLanguageModel(trainingSentenceCollection);
+      languageModel = new InterpolatedBigramLanguagemodel(trainingSentenceCollection, validSentences);
     } else if (model.equalsIgnoreCase("kn_bigram")) {
-      languageModel = new KN_BigramLanguageModel(trainingSentenceCollection, trainingVocabulary, validationSentenceCollection);
-    } else {
+      languageModel = new KN_BigramLanguageModel(trainingSentenceCollection, validSentences);
+    } else if (model.equalsIgnoreCase("trigram")) {
+    	languageModel = new InterpolatedTrigramLanguageModel(trainingSentenceCollection, validSentences);
+    } else if (model.equalsIgnoreCase("kn_trigram")) {
+    	languageModel = new KN_TrigramLanguageModel(trainingSentenceCollection, validSentences);
+    }
+      else {
       throw new RuntimeException("Unknown model descriptor: " + model);
     }
 
     // Evaluate the language model
-    double wsjPerplexity = calculatePerplexity(languageModel, testSentenceCollection);
+    double wsjPerplexity = calculatePerplexity(languageModel, testSentences);
     double hubPerplexity = calculatePerplexity(languageModel, extractCorrectSentenceList(speechNBestLists));
     System.out.println("WSJ Perplexity:  " + wsjPerplexity);
     System.out.println("HUB Perplexity:  " + hubPerplexity);
@@ -337,14 +413,11 @@ public class LanguageModelTester {
     System.out.println("HUB Word Error Rate: " + wordErrorRate);
     
 //    System.out.println("Word Tests:");
-//    List<String> testwords = trainingSentenceCollection.iterator().next();
-//    testwords.add("UNK");
-//    
-//    for (String word : testwords){
-//    	System.out.println(word);
-//    	
-//
-//    }
+//    Set<String> testWords = new HashSet<String>();
+//    testWords.add("high");
+//    testWords.add("makes");
+//    testWords.add("UNK");
+//    checkProbs(languageModel, testWords, unkstartstopVocabulary);
     
     System.out.println("Generated Sentences:");
     for (int i = 0; i < 10; i++) {
