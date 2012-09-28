@@ -2,6 +2,7 @@ package nlp.util;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 /**
@@ -54,6 +55,12 @@ public class CounterMap <K,V> implements java.io.Serializable {
     Counter<V> valueCounter = ensureCounter(key);
     valueCounter.incrementCount(value, count);
     currentModCount++;
+  }
+  
+  public void incrementByCounter(K key, Counter<V> counter) {
+  	for (Entry<V, Double> entry : counter.getEntrySet()) {
+  		incrementCount(key, entry.getKey(), entry.getValue());
+  	}
   }
   
   public void incrementAll(Map<K,V> map, double count) {

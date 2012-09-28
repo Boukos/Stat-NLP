@@ -17,9 +17,9 @@ class KN_BigramLanguageModel implements LanguageModel {
   static final String STOP = "</S>";
   static final String START = "<S>";
   
-  double singletonBicount = 0.0;
-  double doubletonBicount = 0.0;
-  double discount = 0.0;
+//  double singletonBicount = 0.0;
+//  double doubletonBicount = 0.0;
+  double discount = 0.6;
 
   double wordCount = 0.0;
   double vocabSize = 0.0;
@@ -138,15 +138,15 @@ class KN_BigramLanguageModel implements LanguageModel {
 //    System.out.println(reverseBigramCounterMap.getCounter("cat"));
 //    System.out.println( (.5 / 790463.0) * (reverseBigramCounterMap.getCounter("conscript").size() / bigramVocabSize) ) ;
     
-    for (String word1 : bigramCounterMap.keySet()) {
-    	for (String word2 : bigramCounterMap.getCounter(word1).keySet()) {
-    		if (bigramCounterMap.getCount(word1, word2) == 1) { singletonBicount += 1; }
-    		else if (bigramCounterMap.getCount(word1, word2) == 2) { doubletonBicount += 1; }
-    	}
-    }
-    discount = singletonBicount / (singletonBicount + 2 * doubletonBicount);
-    System.out.println("singletonTricount: "+singletonBicount);
-    System.out.println("doubletonTricount: "+doubletonBicount);
-    System.out.println("discount: "+discount);  
+//    for (String word1 : bigramCounterMap.keySet()) {
+//    	for (String word2 : bigramCounterMap.getCounter(word1).keySet()) {
+//    		if (bigramCounterMap.getCount(word1, word2) == 1) { singletonBicount += 1; }
+//    		else if (bigramCounterMap.getCount(word1, word2) == 2) { doubletonBicount += 1; }
+//    	}
+//    }
+//    discount = singletonBicount / (singletonBicount + 2 * doubletonBicount);
+//    System.out.println("singletonTricount: "+singletonBicount);
+//    System.out.println("doubletonTricount: "+doubletonBicount);
+//    System.out.println("discount: "+discount);  
   }
 }

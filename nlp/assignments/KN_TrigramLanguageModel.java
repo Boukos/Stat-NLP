@@ -23,7 +23,7 @@ class KN_TrigramLanguageModel implements LanguageModel {
   
   double singletonTricount = 0.0;
   double doubletonTricount = 0.0;
-  double discount = 0.0;
+  double discount = 0.4;
 
   double wordCount = 0.0;
   double vocabSize = 0.0;
@@ -252,15 +252,15 @@ class KN_TrigramLanguageModel implements LanguageModel {
 //    System.out.println("Get UNK counter:");
 //    System.out.println(bigramCounterMap.getCounter("UNK"));
     
-    for (String word : ubTrigramCounterMap.keySet()) {
-    	for (Pair<String,String> bigram : ubTrigramCounterMap.getCounter(word).keySet()) {
-    		if (ubTrigramCounterMap.getCount(word, bigram) == 1) { singletonTricount += 1.0; }
-    		else if (ubTrigramCounterMap.getCount(word, bigram) == 2) { doubletonTricount += 1.0; }
-    	}
-    }
-    discount = singletonTricount / (singletonTricount + 2 * doubletonTricount);
-    System.out.println("singletonTricount: "+singletonTricount);
-    System.out.println("doubletonTricount: "+doubletonTricount);
-    System.out.println("discount: "+discount);    
+//    for (String word : ubTrigramCounterMap.keySet()) {
+//    	for (Pair<String,String> bigram : ubTrigramCounterMap.getCounter(word).keySet()) {
+//    		if (ubTrigramCounterMap.getCount(word, bigram) == 1) { singletonTricount += 1.0; }
+//    		else if (ubTrigramCounterMap.getCount(word, bigram) == 2) { doubletonTricount += 1.0; }
+//    	}
+//    }
+//    discount = singletonTricount / (singletonTricount + 2 * doubletonTricount);
+//    System.out.println("singletonTricount: "+singletonTricount);
+//    System.out.println("doubletonTricount: "+doubletonTricount);
+//    System.out.println("discount: "+discount);    
   }
 }

@@ -1,20 +1,22 @@
 package nlp.assignments;
 
+import com.aliasi.classify.ConfusionMatrix;
 
-import java.util.List;
-import java.util.Collection;
-import java.util.ArrayList;
-import java.util.Map;
 import java.io.BufferedReader;
 import java.io.FileReader;
-import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 
-import nlp.classify.*;
-import nlp.langmodel.LanguageModel;
+import nlp.classify.FeatureExtractor;
+import nlp.classify.LabeledInstance;
+import nlp.classify.ProbabilisticClassifier;
+import nlp.classify.ProbabilisticClassifierFactory;
 import nlp.util.CommandLineUtils;
 import nlp.util.Counter;
-import nlp.util.Pair;
+import nlp.util.CounterMap;
 
 /**
  * This is the main harness for assignment 2.  To run this harness, use
@@ -66,26 +68,79 @@ public class ProperNameTester {
     }
     return labeledInstances;
   }
+  
+  public static void printCM(ConfusionMatrix cm, String[] cats) {
+  	System.out.println("\nConfusion Matrix:");
+  	System.out.print("\t");
+    for (String cat : cats) {
+    	System.out.printf("%8s", cat);
+    }
+    System.out.print("\n");
+    int[][] matrix = cm.matrix();
+    for (int i=0; i < cats.length; i++) {
+    	System.out.printf("%8s ", cats[i]);
+    	for (int j=0; j < cats.length; j++) {
+        System.out.printf("%-8d ", matrix[i][j]);
+    	}
+    	System.out.print("\n");
+    }
+  }
+  
+  public static String repeatString(String s, int n) { 
+    StringBuilder sb = new StringBuilder(s.length() * n); 
+    for (int i = 0; i < n; i++) 
+       sb.append(s); 
+    return sb.toString(); 
+  }
+  
+  public static void printConfHist(CounterMap<Double,String> cb) {
+  	Double[] bins = cb.keySet().toArray(new Double[cb.keySet().size()]);
+  	Arrays.sort(bins);
+  	System.out.println("\nConfidence Accuracy Histogram:");
+  	for (Double bin : bins) {
+  		double binAccuracy = cb.getCount(bin, "Correct") / cb.getCount(bin, "Total");
+  		System.out.printf("%-3.0f %s (%.2f)\n", bin*10, repeatString("*", (int) Math.ceil(10*binAccuracy)), binAccuracy);
+  	}
+  	System.out.println("\n");
+  }
 
   private static void testClassifier(ProbabilisticClassifier<String, String> classifier, List<LabeledInstance<String, String>> testData, boolean verbose) {
-    double numCorrect = 0.0;
-    double numTotal = 0.0;
+  	CounterMap<String,String> confusionmap = new CounterMap<String,String>();
+  	List<String> categories = new ArrayList<String>();
+  	CounterMap<Double,String> confidenceBin = new CounterMap<Double,String>();
+    double confCorrect = 0.0;
+    double confTotal = 0.0;
     for (LabeledInstance<String, String> testDatum : testData) {
       String name = testDatum.getInput();
-      String label = classifier.getLabel(name);
-      double confidence = classifier.getProbabilities(name).getCount(label);
-      if (label.equals(testDatum.getLabel())) {
-        numCorrect += 1.0;
+      String gold_label = testDatum.getLabel();
+      String response_label = classifier.getLabel(name);
+      double confidence = classifier.getProbabilities(name).getCount(response_label);
+      if (response_label.equals(gold_label)) {
+        confidenceBin.incrementCount(Math.ceil(confidence * 10), "Correct", 1.0);
       } else {
         if (verbose) {
           // display an error
-          System.err.println("Error: "+name+" guess="+label+" gold="+testDatum.getLabel()+" confidence="+confidence);
+          System.err.println("Error: "+name+" guess="+response_label+" gold="+gold_label+" confidence="+confidence);
         }
       }
-      numTotal += 1.0;
+      confidenceBin.incrementCount(Math.ceil(confidence * 10), "Total", 1.0);
+      confusionmap.incrementCount(gold_label, response_label, 1.0);
     }
-    double accuracy = numCorrect / numTotal;
-    System.out.println("Accuracy: " + accuracy);
+    
+    // build confusion matrix    
+    for (String category : confusionmap.keySet()) {
+    	categories.add(category);
+    }
+    String[] cats = categories.toArray(new String[categories.size()]);
+    ConfusionMatrix cm = new ConfusionMatrix(cats);
+    for (int i=0; i < cats.length; i++) {
+    	for (int j=0; j < cats.length; j++) {
+      	cm.incrementByN(i,j, (int)confusionmap.getCount(cats[i], cats[j]));
+    	}
+    }
+    System.out.println("Accuracy: " + cm.totalAccuracy());
+    printCM(cm, cats);
+    printConfHist(confidenceBin);
   }
 
   public static void main(String[] args) throws IOException {
@@ -135,7 +190,8 @@ public class ProperNameTester {
     if (model.equalsIgnoreCase("baseline")) {
       classifier = new MostFrequentLabelClassifier.Factory<String, String>().trainClassifier(trainingData);
     } else if (model.equalsIgnoreCase("n-gram")) {
-      // TODO: construct your n-gram model here
+      ProbabilisticClassifierFactory<String,String> factory = new CharacterUnigramClassifier.Factory<String,String,String>(new ProperNameFeatureExtractor());
+      classifier = factory.trainClassifier(trainingData);
     } else if (model.equalsIgnoreCase("maxent")) {
       // TODO: construct your maxent model here
       ProbabilisticClassifierFactory<String,String> factory = new MaximumEntropyClassifier.Factory<String,String,String>(1.0, 20, new ProperNameFeatureExtractor());

@@ -83,11 +83,12 @@ class InterpolatedBigramLanguagemodel implements LanguageModel {
   String generateNextWord(String word1) {
     double sample = Math.random();
     double sum = 0.0;
-    for (String word2 : bigramCounterMap.keySet()) {
+  	Counter<String> nextwords = bigramCounterMap.getCounter(word1);
+    for (String word2 : nextwords.keySet()) {
       sum += bigramCounterMap.getCount(word1, word2) / unigramCount(word1);
       if (sum > sample) { return word2; }
     }
-    return "nope";
+    return word1+": nope";
   }
 
   public List<String> generateSentence() {
