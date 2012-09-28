@@ -108,8 +108,6 @@ public class ProperNameTester {
   	CounterMap<String,String> confusionmap = new CounterMap<String,String>();
   	List<String> categories = new ArrayList<String>();
   	CounterMap<Double,String> confidenceBin = new CounterMap<Double,String>();
-    double confCorrect = 0.0;
-    double confTotal = 0.0;
     for (LabeledInstance<String, String> testDatum : testData) {
       String name = testDatum.getInput();
       String gold_label = testDatum.getLabel();

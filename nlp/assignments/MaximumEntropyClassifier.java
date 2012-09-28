@@ -334,12 +334,49 @@ public class MaximumEntropyClassifier <I,F,L> implements ProbabilisticClassifier
     // TODO
     // TODO
     // TODO
-
-    // dummy code
+  	
+//  	System.out.println(Arrays.toString(datum.featureIndexes));
+//  	System.out.println(Arrays.toString(datum.featureCounts));
+  	
+  	Counter<Integer> scores = new Counter<Integer>();
+  	
+    for (int labelIndex=0; labelIndex < encoding.getNumLabels(); labelIndex++) {
+    	List<Integer> relevantWeightIndexes = new ArrayList<Integer>();
+    	for (int featureIndex : datum.featureIndexes) {
+    		relevantWeightIndexes.add(indexLinearizer.getLinearIndex(featureIndex, labelIndex));
+    	}
+    
+	    double[] relevantWeights = new double[relevantWeightIndexes.size()];
+	    int counter = 0;
+	    for (int relevantIndex : relevantWeightIndexes) {
+	    	relevantWeights[counter] = (weights[relevantIndex]);
+	    	counter++;
+	    }
+//	    System.out.println(relevantWeightIndexes);
+	    double score = DoubleArrays.innerProduct(datum.featureCounts, relevantWeights);
+//	    System.out.println(score);
+	    scores.setCount(labelIndex, score);
+    }
+    
+    double denom_term = 0.0;
+    for (int labelIndex=0; labelIndex < encoding.getNumLabels(); labelIndex++) {
+    	denom_term += Math.exp(scores.getCount(labelIndex));
+    }
+    
     double[] logProbabilities = DoubleArrays.constantArray(Double.NEGATIVE_INFINITY, encoding.getNumLabels());
-    logProbabilities[0] = 0.0;
+    for (int labelIndex=0; labelIndex < encoding.getNumLabels(); labelIndex++) {
+    	double logprob = scores.getCount(labelIndex) - Math.log(denom_term);
+    	logProbabilities[labelIndex] = logprob;
+    }
+    
     return logProbabilities;
-    // end dummy code
+
+//    // dummy code
+//    double[] logProbabilities = DoubleArrays.constantArray(Double.NEGATIVE_INFINITY, encoding.getNumLabels());
+//    logProbabilities[0] = 0.0;
+//    return logProbabilities;
+//    // end dummy code
+
 
     // TODO
   }

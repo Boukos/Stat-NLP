@@ -56,7 +56,8 @@ class CharacterUnigramClassifier<I,F,L> implements ProbabilisticClassifier<I,L> 
     	double denom_prior = labelProb(denom_label);
     	double denom_prob = 1.0;
     	for (F feature : inputFeatures.keySet()) {
-    		denom_prob *= featureGivenLabelProb(denom_label, feature);
+    		double prob = Math.pow(featureGivenLabelProb(denom_label, feature), inputFeatures.getCount(feature));
+    		denom_prob *= prob;
     	}
     	denominator += denom_prior * denom_prob;
     }
@@ -64,7 +65,7 @@ class CharacterUnigramClassifier<I,F,L> implements ProbabilisticClassifier<I,L> 
     	double label_prior = labelProb(label);
       double product_term = 1.0;
       for (F feature : inputFeatures.keySet()) {
-      	double prob = featureGivenLabelProb(label, feature);
+      	double prob = Math.pow(featureGivenLabelProb(label, feature), inputFeatures.getCount(feature));
       	product_term *= prob;
       }
       double label_given_features_prob = label_prior * product_term / denominator;
