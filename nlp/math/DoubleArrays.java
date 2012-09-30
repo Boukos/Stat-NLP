@@ -17,6 +17,17 @@ public class DoubleArrays {
 					+ y.length);
 		System.arraycopy(x, 0, y, 0, x.length);
 	}
+	
+	public static void assign(double[] y, double[] x, int startPos) {
+		System.arraycopy(x, 0, y, startPos, x.length);
+	}
+	
+	public static double[] concat(double[] x, double[] y) {
+		double[] result = new double[x.length + y.length];
+		System.arraycopy(x, 0, result, 0, x.length);
+		System.arraycopy(y, 0, result, x.length, y.length);
+		return result;
+	}
 
 	public static double innerProduct(double[] x, double[] y) {
 		if (x.length != y.length)

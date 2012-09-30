@@ -156,22 +156,60 @@ public class MaximumEntropyClassifier <I,F,L> implements ProbabilisticClassifier
       double[] derivatives = DoubleArrays.constantArray(0.0, dimension());
       // TODO: compute the objective and its derivatives
       // TODO
+      
+      for (EncodedDatum datum : data) {
+      	int labelIndex = datum.getLabelIndex();
+      	objective += getLogProbabilities(datum, x, encoding, indexLinearizer)[labelIndex];
+      }
+      
+//      System.out.println("objective: " + objective);
 
       // logProb
-
-      // dummy code
-      objective = 42.0;
-      for (int i = 0; i < derivatives.length; i++) {
-        derivatives[i] = 0.0;
+      
+//      for (int y=0; y < derivatives.length; y++) {
+//        double derivative = 0.0;
+//      	for (EncodedDatum datum : data) {
+//      		int labelIndex = datum.getLabelIndex();
+//      		if (labelIndex == y) {
+//      			
+//      		}
+//      	}
+//      }
+//      
+      for (L y : encoding.getLabels()) {
+      	int loop_labelIndex = encoding.getLabelIndex(y);
+      	for (EncodedDatum datum : data) {
+      		double[] partialVector = DoubleArrays.constantArray(0.0, datum.getNumActiveFeatures());
+      		int gold_labelIndex = datum.getLabelIndex();
+      		if (gold_labelIndex == loop_labelIndex) {
+      			partialVector = DoubleArrays.add(partialVector, datum.featureCounts);
+      		}
+    			double prob_term = Math.exp(getLogProbabilities(datum, x, encoding, indexLinearizer)[loop_labelIndex]);
+    			double[] subtraction_term = DoubleArrays.multiply(datum.featureCounts, prob_term);
+    			partialVector = DoubleArrays.subtract(partialVector, subtraction_term);
+    			for (int i=0; i < datum.getNumActiveFeatures(); i++) {
+    				int d_index = indexLinearizer.getLinearIndex(datum.getFeatureIndex(i), loop_labelIndex);
+    				derivatives[d_index] += partialVector[i];
+    			}
+      	}
       }
-      // end dummy code
+
+//      // dummy code
+//      objective = 42.0;
+//      for (int i = 0; i < derivatives.length; i++) {
+//        derivatives[i] = 0.0;
+//      }
+//      // end dummy code
 
       // TODO: incorporate penalty terms into the objective and derivatives
       // penalties
+      
+      objective -= 0.5 * Math.pow(DoubleArrays.vectorLength(x) / sigma, 2);
+      DoubleArrays.add(derivatives, DoubleArrays.multiply(x, - 1 / Math.pow(sigma, 2)));
 
       // TODO
       // TODO
-      return new Pair<Double, double[]>(objective, derivatives);
+      return new Pair<Double, double[]>(-objective, DoubleArrays.multiply(derivatives, -1));
     }
 
     public ObjectiveFunction(Encoding<F, L> encoding, EncodedDatum[] data, IndexLinearizer indexLinearizer, double sigma) {
@@ -280,6 +318,14 @@ public class MaximumEntropyClassifier <I,F,L> implements ProbabilisticClassifier
     public L getLabel(int labelIndex) {
       return labelIndexer.get(labelIndex);
     }
+    
+    public List<L> getLabels() {
+    	List<L> labelList = new ArrayList<L>();
+    	for (int i=0; i < labelIndexer.size(); i++) {
+    		labelList.add(getLabel(i));
+    	}
+    	return labelList;
+    }
 
     public Encoding(Indexer<F> featureIndexer, Indexer<L> labelIndexer) {
       this.featureIndexer = featureIndexer;
@@ -330,17 +376,15 @@ public class MaximumEntropyClassifier <I,F,L> implements ProbabilisticClassifier
    * (refered to as activations) are *almost* log probabilities, but need to be normalized.
    */
   private static <F,L> double[] getLogProbabilities(EncodedDatum datum, double[] weights, Encoding<F, L> encoding, IndexLinearizer indexLinearizer) {
-    // TODO: apply the classifier to this feature vector
-    // TODO
-    // TODO
-    // TODO
   	
 //  	System.out.println(Arrays.toString(datum.featureIndexes));
 //  	System.out.println(Arrays.toString(datum.featureCounts));
+//  	System.out.println(encoding.getNumFeatures());
   	
   	Counter<Integer> scores = new Counter<Integer>();
   	
-    for (int labelIndex=0; labelIndex < encoding.getNumLabels(); labelIndex++) {
+    for (L label : encoding.getLabels()) {
+    	int labelIndex = encoding.getLabelIndex(label);
     	List<Integer> relevantWeightIndexes = new ArrayList<Integer>();
     	for (int featureIndex : datum.featureIndexes) {
     		relevantWeightIndexes.add(indexLinearizer.getLinearIndex(featureIndex, labelIndex));
@@ -359,12 +403,14 @@ public class MaximumEntropyClassifier <I,F,L> implements ProbabilisticClassifier
     }
     
     double denom_term = 0.0;
-    for (int labelIndex=0; labelIndex < encoding.getNumLabels(); labelIndex++) {
+    for (L label : encoding.getLabels()) {
+    	int labelIndex = encoding.getLabelIndex(label);
     	denom_term += Math.exp(scores.getCount(labelIndex));
     }
     
     double[] logProbabilities = DoubleArrays.constantArray(Double.NEGATIVE_INFINITY, encoding.getNumLabels());
-    for (int labelIndex=0; labelIndex < encoding.getNumLabels(); labelIndex++) {
+    for (L label : encoding.getLabels()) {
+    	int labelIndex = encoding.getLabelIndex(label);
     	double logprob = scores.getCount(labelIndex) - Math.log(denom_term);
     	logProbabilities[labelIndex] = logprob;
     }
