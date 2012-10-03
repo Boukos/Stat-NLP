@@ -154,8 +154,8 @@ public class MaximumEntropyClassifier <I,F,L> implements ProbabilisticClassifier
     private Pair<Double, double[]> calculate(double[] x) {
       double objective = 0.0;
       double[] derivatives = DoubleArrays.constantArray(0.0, dimension());
-      // TODO: compute the objective and its derivatives
-      // TODO
+      
+      // compute the objective and its derivatives
       
       for (EncodedDatum datum : data) {
       	int labelIndex = datum.getLabelIndex();
@@ -165,17 +165,7 @@ public class MaximumEntropyClassifier <I,F,L> implements ProbabilisticClassifier
 //      System.out.println("objective: " + objective);
 
       // logProb
-      
-//      for (int y=0; y < derivatives.length; y++) {
-//        double derivative = 0.0;
-//      	for (EncodedDatum datum : data) {
-//      		int labelIndex = datum.getLabelIndex();
-//      		if (labelIndex == y) {
-//      			
-//      		}
-//      	}
-//      }
-//      
+       
       for (L y : encoding.getLabels()) {
       	int loop_labelIndex = encoding.getLabelIndex(y);
       	for (EncodedDatum datum : data) {
@@ -194,21 +184,11 @@ public class MaximumEntropyClassifier <I,F,L> implements ProbabilisticClassifier
       	}
       }
 
-//      // dummy code
-//      objective = 42.0;
-//      for (int i = 0; i < derivatives.length; i++) {
-//        derivatives[i] = 0.0;
-//      }
-//      // end dummy code
-
-      // TODO: incorporate penalty terms into the objective and derivatives
-      // penalties
+      // incorporate penalty terms into the objective and derivatives penalties
       
       objective -= 0.5 * Math.pow(DoubleArrays.vectorLength(x) / sigma, 2);
       DoubleArrays.add(derivatives, DoubleArrays.multiply(x, - 1 / Math.pow(sigma, 2)));
 
-      // TODO
-      // TODO
       return new Pair<Double, double[]>(-objective, DoubleArrays.multiply(derivatives, -1));
     }
 
@@ -424,7 +404,6 @@ public class MaximumEntropyClassifier <I,F,L> implements ProbabilisticClassifier
 //    // end dummy code
 
 
-    // TODO
   }
 
   public Counter<L> getProbabilities(I input) {

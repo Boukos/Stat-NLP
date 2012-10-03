@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import nlp.classify.FeatureExtractor;
 import nlp.classify.LabeledInstance;
@@ -38,22 +40,111 @@ public class ProperNameTester {
      * features are extracted.  An easy extension would be to also throw character
      * bigrams into the feature list, but better features are also possible.
      */
+  	
     public Counter<String> extractFeatures(String name) {
       char[] characters = name.toCharArray();
       Counter<String> features = new Counter<String>();
-      // add character unigram features
+      
+      // add character unigram/bigram features
       for (int i = 0; i < characters.length; i++) {
         char character = characters[i];
         features.incrementCount("UNI-" + character, 1.0);
+        if (i < characters.length - 1) {
+        	char character2 = characters[i+1];
+      		features.incrementCount("BI-" + character + character2, 1.0);
+        	if (i < characters.length - 2) {
+          	char character3 = characters[i+2];
+          	features.incrementCount("TRI-" + character + character2 + character3, 1.0);
+          	if (i < characters.length - 3) {
+          		char character4 = characters[i+3];
+          		features.incrementCount("QUAD-" + character + character2 + character3 + character4, 1.0);
+//        		  if (i < characters.length - 4) {
+//        		  	char character5 = characters[i+4];
+//        		  	features.incrementCount("QUINT-" + character + character2 + character3 + character4 + character5, 1.0);
+//          		}
+          	}
+        	}
+        }
       }
-      // TODO : extract better features!
-      // TODO
-      // TODO
-      // TODO
+      
+      // approximate syllable and wordlength averages, which are apparently useless
+//      int wordcount = 1;
+//      int sum = 0;
+//      int sylcount = 0;
+//      String[] protowords = name.split(" ");
+//      String word_regex = "[^\\p{L}]";
+//      Pattern word_pattern = Pattern.compile(word_regex);
+//      for (String word : protowords) {
+//        if (!word_pattern.matcher(word).find()) { 
+//        	wordcount++;
+//        	sum += word.length();
+//        }
+//      }
+//      String syll_regex = "(?i)\\w*?[aeiouy]+(?=([a-z&&[^aeiou]]+[aeiouy]+))\\w*?";
+//      Pattern syll_pattern = Pattern.compile(syll_regex);
+//      Matcher syll_matcher = syll_pattern.matcher(name);
+//      while (syll_matcher.find()) {
+//      	sylcount++;
+//      }
+//      double wordavg = sum / wordcount;
+//      double syllavg = (sylcount + wordcount) / wordcount;
+//      features.incrementCount("AvgSylCount", syllavg);
+//      features.incrementCount("AvgWordLength", wordavg);
+      
+      // extract name-like patterns
+      String name_regex = "(?u)^(\\p{Lu}[\\p{L}&&[^\\p{Lu}]]+ |(\\p{Lu}\\.)+ )((\\p{Lu}\\.)+ )*\\p{Lu}[\\p{L}&&[^\\p{Lu}]]+$";
+      Pattern name_pattern = Pattern.compile(name_regex);
+      Matcher name_matcher = name_pattern.matcher(name);
+      String name_filter = "^The | ((?i)Inc|Co|Corp|Corporation|Company|Ltd|Limited|Trust|Plc)$";
+      Pattern filter_pattern = Pattern.compile(name_filter);
+      if (name_matcher.find()) {
+      	String namelike = name_matcher.group(0);
+      	if (!filter_pattern.matcher(namelike).find()) {
+//      		System.out.println(namelike);
+          features.incrementCount("Namelike", 1.0);
+      	}
+      }
+      
+      // extract "Inc."-style tags
+      String corp_regex = "(?i).*\\b(?: Inc|Co|Corp|Corporation|Company|Ltd|Limited|Trust|Plc|S[\\. ]?A)\\.?$";
+      Pattern corp_pattern = Pattern.compile(corp_regex);
+      Matcher corp_matcher = corp_pattern.matcher(name);
+      if (corp_matcher.matches()) { features.incrementCount("Inc", 1.0); }
+      
+      // extract chemical-sounding endings
+      String chem_regex = ".*\\w(?: a[cs]e|tone|al|yl|aid|gens?|zyme)$";
+      Pattern chem_pattern = Pattern.compile(chem_regex);
+      Matcher chem_matcher = chem_pattern.matcher(name);
+      if (chem_matcher.matches()) { features.incrementCount("ChemEnding", 1.0); }
+      
+      // extract in-name-dict
+//      List<String> words = new ArrayList<String>();
+//	    String[] protowords = name.split(" ");
+//	    String word_regex = "[^\\p{L}]";
+//	    Pattern word_pattern = Pattern.compile(word_regex);
+//	    for (String word : protowords) {
+//	      if (!word_pattern.matcher(word).find()) { words.add(word); }
+//	    }
+//	    for (String word : words) {
+//      	if (name_dict.contains(word)) {
+//      		features.incrementCount("containsName", 1.0);
+//      		break;
+//      	}
+//      }
+      	
       return features;
     }
   }
 
+  private static List<String> loadNames() throws IOException {
+    BufferedReader reader = new BufferedReader(new FileReader("/Users/bumford/Desktop/Given-Names.txt"));
+    List<String> given_names = new ArrayList<String>();
+    while (reader.ready()) {
+      String given_name = reader.readLine().trim();
+      given_names.add(given_name);
+    }
+    return given_names;
+  }
 
   private static List<LabeledInstance<String, String>> loadData(String fileName) throws IOException {
     BufferedReader reader = new BufferedReader(new FileReader(fileName));
@@ -191,9 +282,11 @@ public class ProperNameTester {
       ProbabilisticClassifierFactory<String,String> factory = new CharacterUnigramClassifier.Factory<String,String,String>(new ProperNameFeatureExtractor());
       classifier = factory.trainClassifier(trainingData);
     } else if (model.equalsIgnoreCase("maxent")) {
-      // TODO: construct your maxent model here
-      ProbabilisticClassifierFactory<String,String> factory = new MaximumEntropyClassifier.Factory<String,String,String>(1.0, 20, new ProperNameFeatureExtractor());
+      ProbabilisticClassifierFactory<String,String> factory = new MaximumEntropyClassifier.Factory<String,String,String>(1.0, 40, new ProperNameFeatureExtractor());
       classifier = factory.trainClassifier(trainingData);
+    } else if (model.equalsIgnoreCase("perceptron")) {
+    	ProbabilisticClassifierFactory<String,String> factory = new PerceptronClassifier.Factory<String,String,String>(new ProperNameFeatureExtractor());
+    	classifier = factory.trainClassifier(trainingData);
     } else {
       throw new RuntimeException("Unknown model descriptor: " + model);
     }
