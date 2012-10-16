@@ -185,11 +185,12 @@ public class POSTaggerTester {
    * A Trellis is a graph with a start state an an end state, along with
    * successor and predecessor functions.
    */
-  static class Trellis <S> {
+  static class Trellis<S> {
     S startState;
     S endState;
-    CounterMap<S, S> forwardTransitions;
-    CounterMap<S, S> backwardTransitions;
+    int sentLength;
+    CounterMap<S,S> forwardTransitions;
+    CounterMap<S,S> backwardTransitions;
 
     /**
      * Get the unique start state for this trellis.
@@ -211,6 +212,14 @@ public class POSTaggerTester {
 
     public void setStopState(S endState) {
       this.endState = endState;
+    }
+    
+    public int getSentLength() {
+    	return sentLength;
+    }
+    
+    public void setSentLength(int length) {
+    	this.sentLength = length;
     }
 
     /**
@@ -240,8 +249,8 @@ public class POSTaggerTester {
     }
 
     public Trellis() {
-      forwardTransitions = new CounterMap<S, S>();
-      backwardTransitions = new CounterMap<S, S>();
+      forwardTransitions = new CounterMap<S,S>();
+      backwardTransitions = new CounterMap<S,S>();
     }
   }
 
@@ -251,12 +260,13 @@ public class POSTaggerTester {
    * trellis.getEndState(), and each pair of states is conntected in the
    * trellis.
    */
-  static interface TrellisDecoder <S> {
+  static interface TrellisDecoder<S> {
     List<S> getBestPath(Trellis<S> trellis);
   }
 
-  static class GreedyDecoder <S> implements TrellisDecoder<S> {
+  static class GreedyDecoder<S> implements TrellisDecoder<S> {
     public List<S> getBestPath(Trellis<S> trellis) {
+//    	System.out.println("beginning best path");
       List<S> states = new ArrayList<S>();
       S currentState = trellis.getStartState();
       states.add(currentState);
@@ -267,6 +277,66 @@ public class POSTaggerTester {
         currentState = nextState;
       }
       return states;
+    }
+  }
+  
+  static class ViterbiDecoder<S> implements TrellisDecoder<S> {
+  	HashMap<Pair<S,Integer>,S> backpointers = new HashMap<Pair<S,Integer>,S>();
+  	HashMap<Pair<S,Integer>,Double> viterbis = new HashMap<Pair<S,Integer>,Double>();
+  	
+    public List<S> getBestPath(Trellis<S> trellis) {
+    	backpointers.clear();
+    	viterbis.clear();
+//    	System.out.println("beginning best path");
+    	List<S> states = new ArrayList<S>();
+      S endState = trellis.getEndState();
+      states.add(endState);
+//      System.out.println("endstate: " + ((State)endState).toString());
+      int sentLength = trellis.sentLength;
+      double maxProb = viterbi(trellis, endState, sentLength+2);
+      S currentState = endState;
+      int statesIndex = sentLength+2;
+      while (!currentState.equals(trellis.getStartState())) {
+//      	System.out.println("beginning states");
+//      	System.out.println("backpointers: " + backpointers.toString());
+      	S priorState = backpointers.get(Pair.makePair(currentState, statesIndex));
+//      	System.out.println("prior state: " + ((State)priorState).toString());
+      	states.add(0, priorState);
+//      	System.out.println(states);
+      	currentState = priorState;
+      	statesIndex--;
+      }
+//      System.out.println(states);
+      return states;
+    }
+    
+    public double viterbi(Trellis<S> trellis, S state, int timestep) {
+//    	System.out.println("beginning viterbi");
+//    	System.out.println("state+timestep: " + ((State)state).toString() + " " + timestep);
+    	if (timestep == 1) {
+      	S startState = trellis.getStartState();
+      	Counter<S> firstTransitions = trellis.getForwardTransitions(startState);
+      	double vitValue = firstTransitions.getCount(state);
+//      	System.out.println("viterbi_start: " + vitValue);
+      	backpointers.put(Pair.makePair(state, timestep), startState);
+    		return vitValue;
+    	}
+    	else {
+    		Counter<S> backTransitions = trellis.getBackwardTransitions(state);
+    		Counter<S> candidates = new Counter<S>();
+    		for (S priorState : backTransitions.keySet()) {
+    			if (!viterbis.containsKey(Pair.makePair(priorState, timestep - 1))) {
+    				viterbis.put(Pair.makePair(priorState, timestep - 1), viterbi(trellis, priorState, timestep - 1));
+    			}
+  				double priorValue = viterbis.get(Pair.makePair(priorState, timestep - 1)) + backTransitions.getCount(priorState);
+    			candidates.incrementCount(priorState, priorValue);
+    		}
+    		S winner = candidates.argMax();
+    		double vitValue = candidates.getCount(winner);
+//    		System.out.println("viterbi_winner " + timestep + ": " + vitValue);
+    		backpointers.put(Pair.makePair(state,timestep), winner);
+    		return vitValue;
+    	}
     }
   }
 
@@ -314,6 +384,7 @@ public class POSTaggerTester {
       trellis.setStartState(State.getStartState());
       State stopState = State.getStopState(sentence.size() + 2);
       trellis.setStopState(stopState);
+      trellis.setSentLength(sentence.size());
       Set<State> states = Collections.singleton(State.getStartState());
       for (int position = 0; position <= sentence.size() + 1; position++) {
         Set<State> nextStates = new HashSet<State>();
@@ -531,6 +602,117 @@ public class POSTaggerTester {
       this.restrictTrigrams = restrictTrigrams;
     }
   }
+  
+	static class HMMTrigramTagScorer implements LocalTrigramScorer {
+		
+		CounterMap<String,String> wordsToTags = new CounterMap<String,String>();
+		CounterMap<String,String> tagsToWords = new CounterMap<String,String>();
+		CounterMap<String,String> tagBigramCounterMap = new CounterMap<String,String>();
+		CounterMap<String,String> tagTrigramCounterMap = new CounterMap<String,String>();
+		
+		Counter<String> unknownWordTags = new Counter<String>();
+    Set<String> seenTagTrigrams = new HashSet<String>();
+    Set<String> seenTagBigrams = new HashSet<String>();
+    
+    public int getHistorySize() {
+      return 2;
+    }
+
+    public Counter<String> getLogScoreCounter(LocalTrigramContext localTrigramContext) {
+      int position = localTrigramContext.getPosition();
+      String word = localTrigramContext.getWords().get(position);
+      String previousPreviousTag = localTrigramContext.getPreviousPreviousTag();
+      String previousTag = localTrigramContext.getPreviousTag();
+      String previousTwoTags = makeBigramString(previousPreviousTag, previousTag);
+      Counter<String> tagCounter = unknownWordTags;
+    	boolean knownWord = wordsToTags.keySet().contains(word);
+      if (knownWord) {
+        tagCounter = wordsToTags.getCounter(word);
+      }
+      Set<String> allowedFollowingTags = allowedFollowingTags(tagCounter.keySet(), previousPreviousTag, previousTag);
+      Counter<String> logScoreCounter = new Counter<String>();
+      for (String tag : tagCounter.keySet()) {
+      	double emissionProb = 0.0;
+      	double transitionProb = 0.0;
+      	double logScore = 0.0;
+      	String tagTrigram = makeTrigramString(previousPreviousTag, previousTag, tag);
+      	if (knownWord) {
+	      	Counter<String> emissionCounter = tagsToWords.getCounter(tag);
+	      	emissionProb = emissionCounter.getCount(word);
+	      	if (emissionProb == 0.0) {System.out.println("emiterr: " + word);}
+	      	if (allowedFollowingTags.contains(tag)) {
+	      		transitionProb = tagTrigramCounterMap.getCount(previousTwoTags, tag);
+		        if (transitionProb == 0.0) {System.out.println("TRItranserr: " + tagTrigram);}
+	      		logScore = Math.log(emissionProb * transitionProb);
+	      	}
+	      	else if (seenTagBigrams.contains(makeBigramString(previousTag, tag))) {
+	      		transitionProb = tagBigramCounterMap.getCount(previousTag, tag);
+	      		if (transitionProb == 0.0) {System.out.println("BItranserr: " + makeBigramString(previousTag, tag));}
+		        logScore = Math.log(emissionProb * transitionProb);
+	      	}
+	      	else {
+	      		logScore = Math.log(emissionProb * tagCounter.getCount(tag));
+	      	}
+      	}
+      	else {
+      		logScore = Math.log(tagCounter.getCount(tag));
+      	}
+        logScoreCounter.setCount(tag, logScore);
+      }
+      return logScoreCounter;
+    }
+
+    private Set<String> allowedFollowingTags(Set<String> tags, String previousPreviousTag, String previousTag) {
+      Set<String> allowedTags = new HashSet<String>();
+      for (String tag : tags) {
+        String trigramString = makeTrigramString(previousPreviousTag, previousTag, tag);
+        if (seenTagTrigrams.contains((trigramString))) {
+          allowedTags.add(tag);
+        }
+      }
+      return allowedTags;
+    }
+    
+    private String makeBigramString(String previousPreviousTag, String previousTag) {
+      return previousPreviousTag + " " + previousTag;
+    }
+
+    private String makeTrigramString(String previousPreviousTag, String previousTag, String currentTag) {
+      return previousPreviousTag + " " + previousTag + " " + currentTag;
+    }
+
+		public void train(List<LabeledLocalTrigramContext> labeledLocalTrigramContexts) {
+      // collect word-tag counts
+      for (LabeledLocalTrigramContext labeledLocalTrigramContext : labeledLocalTrigramContexts) {
+        String word = labeledLocalTrigramContext.getCurrentWord();
+        String tag = labeledLocalTrigramContext.getCurrentTag();
+        String previousTag = labeledLocalTrigramContext.getPreviousTag();
+        String previousPreviousTag = labeledLocalTrigramContext.getPreviousPreviousTag();
+        if (!wordsToTags.keySet().contains(word)) {
+          // word is currently unknown, so tally its tag in the unknown tag counter
+          unknownWordTags.incrementCount(tag, 1.0);
+        }
+        wordsToTags.incrementCount(word, tag, 1.0);
+        tagsToWords.incrementCount(tag, word, 1.0);
+        tagBigramCounterMap.incrementCount(previousTag, tag, 1.0);
+        tagTrigramCounterMap.incrementCount(makeBigramString(previousPreviousTag, previousTag), tag, 1.0);
+        seenTagTrigrams.add(makeTrigramString(previousPreviousTag, previousTag, tag));
+        seenTagBigrams.add(makeBigramString(previousTag, tag));
+      }
+      wordsToTags = Counters.conditionalNormalize(wordsToTags);
+      tagsToWords = Counters.conditionalNormalize(tagsToWords);
+      tagBigramCounterMap = Counters.conditionalNormalize(tagBigramCounterMap);
+      tagTrigramCounterMap = Counters.conditionalNormalize(tagTrigramCounterMap);
+      unknownWordTags = Counters.normalize(unknownWordTags);
+//      System.out.println(tagsToWords.keySet());
+    }
+
+		public void validate(List<LabeledLocalTrigramContext> localTrigramContexts) {
+			// TODO Auto-generated method stub
+			
+		}
+  	
+  }
 
   private static List<TaggedSentence> readTaggedSentences(String path, int low, int high) {
     Collection<Tree<String>> trees = PennTreebankReader.readTrees(path, low, high);
@@ -668,10 +850,9 @@ public class POSTaggerTester {
     System.out.println("done.");
 
     // Construct tagger components
-    // TODO : improve on the MostFrequentTagScorer
-    LocalTrigramScorer localTrigramScorer = new MostFrequentTagScorer(false);
+    LocalTrigramScorer localTrigramScorer = new HMMTrigramTagScorer();
     // TODO : improve on the GreedyDecoder
-    TrellisDecoder<State> trellisDecoder = new GreedyDecoder<State>();
+    TrellisDecoder<State> trellisDecoder = new ViterbiDecoder<State>();
 
     // Train tagger
     POSTagger posTagger = new POSTagger(localTrigramScorer, trellisDecoder);

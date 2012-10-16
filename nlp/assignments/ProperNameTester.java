@@ -1,6 +1,7 @@
 package nlp.assignments;
 
 import com.aliasi.classify.ConfusionMatrix;
+import com.aliasi.util.Strings;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -41,14 +42,19 @@ public class ProperNameTester {
      * bigrams into the feature list, but better features are also possible.
      */
   	
+  	List<String> nameDict;
+  	List<String> wordDict;
+  	
     public Counter<String> extractFeatures(String name) {
       char[] characters = name.toCharArray();
       Counter<String> features = new Counter<String>();
       
       // add character unigram/bigram features
+      // (and maybe count digits while at it)
       for (int i = 0; i < characters.length; i++) {
         char character = characters[i];
         features.incrementCount("UNI-" + character, 1.0);
+//        if (Character.isDigit(character)) { features.incrementCount("Digits", 1.0); }
         if (i < characters.length - 1) {
         	char character2 = characters[i+1];
       		features.incrementCount("BI-" + character + character2, 1.0);
@@ -58,10 +64,10 @@ public class ProperNameTester {
           	if (i < characters.length - 3) {
           		char character4 = characters[i+3];
           		features.incrementCount("QUAD-" + character + character2 + character3 + character4, 1.0);
-//        		  if (i < characters.length - 4) {
-//        		  	char character5 = characters[i+4];
-//        		  	features.incrementCount("QUINT-" + character + character2 + character3 + character4 + character5, 1.0);
-//          		}
+        		  if (i < characters.length - 4) {
+        		  	char character5 = characters[i+4];
+        		  	features.incrementCount("QUINT-" + character + character2 + character3 + character4 + character5, 1.0);
+          		}
           	}
         	}
         }
@@ -92,10 +98,10 @@ public class ProperNameTester {
 //      features.incrementCount("AvgWordLength", wordavg);
       
       // extract name-like patterns
-      String name_regex = "(?u)^(\\p{Lu}[\\p{L}&&[^\\p{Lu}]]+ |(\\p{Lu}\\.)+ )((\\p{Lu}\\.)+ )*\\p{Lu}[\\p{L}&&[^\\p{Lu}]]+$";
+      String name_regex = "(?u)^(?:\\p{Lu}[\\p{L}&&[^\\p{Lu}]]+ |(?:\\p{Lu}\\.)+ )(?:(?:\\p{Lu}\\.)+ )*\\p{Lu}[\\p{L}&&[^\\p{Lu}]]+$";
       Pattern name_pattern = Pattern.compile(name_regex);
       Matcher name_matcher = name_pattern.matcher(name);
-      String name_filter = "^The | ((?i)Inc|Co|Corp|Corporation|Company|Ltd|Limited|Trust|Plc)$";
+      String name_filter = "^The | (?:(?i)Inc|Co|Corp|Corporation|Company|Ltd|Limited|Trust|Plc)\\.?$";
       Pattern filter_pattern = Pattern.compile(name_filter);
       if (name_matcher.find()) {
       	String namelike = name_matcher.group(0);
@@ -106,38 +112,80 @@ public class ProperNameTester {
       }
       
       // extract "Inc."-style tags
-      String corp_regex = "(?i).*\\b(?: Inc|Co|Corp|Corporation|Company|Ltd|Limited|Trust|Plc|S[\\. ]?A)\\.?$";
+      String corp_regex = "(?i).*\\b(?:Inc|Co|Corp|Corporation|Company|Ltd|Limited|Trust|Plc|S[\\. ]?A)\\.?$";
       Pattern corp_pattern = Pattern.compile(corp_regex);
       Matcher corp_matcher = corp_pattern.matcher(name);
       if (corp_matcher.matches()) { features.incrementCount("Inc", 1.0); }
       
       // extract chemical-sounding endings
-      String chem_regex = ".*\\w(?: a[cs]e|tone|al|yl|aid|gens?|zyme)$";
+      String chem_regex = ".*\\p{L}(?:a[cs]e|tone|al|yl|aid|gens?|zyme)$";
       Pattern chem_pattern = Pattern.compile(chem_regex);
       Matcher chem_matcher = chem_pattern.matcher(name);
       if (chem_matcher.matches()) { features.incrementCount("ChemEnding", 1.0); }
       
-      // extract in-name-dict
+      // extract place-name endings
+      String place_regex = "(?u)^\\p{L}+(?:bo?[eu]rgh|bridge|bury|town|wood|stan|field|ham|sted|dale|land|hurst|ward|derry|berr?y|ville|tree|ton|port|hill|grove|vale|ford|brook|wald|dorf)$";
+      Pattern place_pattern = Pattern.compile(place_regex);
+      Matcher place_matcher = place_pattern.matcher(name);
+      if (place_matcher.matches()) {
+      	features.incrementCount("PlaceEnding", 1.0);
+//      	System.out.println(name);
+      	}
+      
+      String[] protowords = name.split(" ");
+      
+//      // count words longer than 6 letters
+//      for (String word : protowords) {
+//      	String cleanWord = word.replaceAll("[\\p{P}\\d]", "");
+//      	if (cleanWord.length() >= 6) { features.incrementCount("Greater6", 1.0); }
+//      }
+      
+      // count words longer than 8 letters
+      for (String word : protowords) {
+      	String cleanWord = word.replaceAll("[\\p{P}\\d]", "");
+      	if (cleanWord.length() >= 8) { features.incrementCount("Greater8", 1.0); }
+      }
+      
+      
+//      // extract in-dictionary type features
 //      List<String> words = new ArrayList<String>();
-//	    String[] protowords = name.split(" ");
+//	    if (protowords.length == 1) { features.incrementCount("OneWord", 1.0); }
 //	    String word_regex = "[^\\p{L}]";
 //	    Pattern word_pattern = Pattern.compile(word_regex);
 //	    for (String word : protowords) {
 //	      if (!word_pattern.matcher(word).find()) { words.add(word); }
 //	    }
 //	    for (String word : words) {
-//      	if (name_dict.contains(word)) {
+//      	if (nameDict.contains(word)) {
 //      		features.incrementCount("containsName", 1.0);
+////      		System.out.println(name+": "+word+", ");
 //      		break;
 //      	}
 //      }
+//	    boolean allWords = true;
+//	    for (String word : protowords) {
+//	    	if (!wordDict.contains(word.toLowerCase())) {
+//	    		allWords = false;
+//	    		break;
+//	    	}
+//	    }
+////	    System.out.println(Arrays.toString(protowords) + ": " + allWords);
+//	    if (words.size() > 0 && allWords) { 
+////	    	System.out.println(name);
+//	    	features.incrementCount("AllWords", 1.0);
+//	    }
       	
       return features;
     }
+    
+    public ProperNameFeatureExtractor(List<String> nameDict, List<String> wordDict) {
+    	this.nameDict = nameDict;
+    	this.wordDict = wordDict;
+    }
   }
 
-  private static List<String> loadNames() throws IOException {
-    BufferedReader reader = new BufferedReader(new FileReader("/Users/bumford/Desktop/Given-Names.txt"));
+  private static List<String> loadWords(String filename) throws IOException {
+    BufferedReader reader = new BufferedReader(new FileReader(filename));
     List<String> given_names = new ArrayList<String>();
     while (reader.ready()) {
       String given_name = reader.readLine().trim();
@@ -273,19 +321,22 @@ public class ProperNameTester {
     List<LabeledInstance<String, String>> trainingData = loadData(basePath + "/pnp-train.txt");
     List<LabeledInstance<String, String>> validationData = loadData(basePath + "/pnp-validate.txt");
     List<LabeledInstance<String, String>> testData = loadData(basePath + "/pnp-test.txt");
+    
+    List<String> nameDict = loadWords(basePath + "/../Given-Names.txt");
+    List<String> wordDict = loadWords(basePath + "/../All-Words.txt");
 
     // Learn a classifier
     ProbabilisticClassifier<String, String> classifier = null;
     if (model.equalsIgnoreCase("baseline")) {
       classifier = new MostFrequentLabelClassifier.Factory<String, String>().trainClassifier(trainingData);
     } else if (model.equalsIgnoreCase("n-gram")) {
-      ProbabilisticClassifierFactory<String,String> factory = new CharacterUnigramClassifier.Factory<String,String,String>(new ProperNameFeatureExtractor());
+      ProbabilisticClassifierFactory<String,String> factory = new CharacterUnigramClassifier.Factory<String,String,String>(new ProperNameFeatureExtractor(nameDict, wordDict));
       classifier = factory.trainClassifier(trainingData);
     } else if (model.equalsIgnoreCase("maxent")) {
-      ProbabilisticClassifierFactory<String,String> factory = new MaximumEntropyClassifier.Factory<String,String,String>(1.0, 40, new ProperNameFeatureExtractor());
+      ProbabilisticClassifierFactory<String,String> factory = new MaximumEntropyClassifier.Factory<String,String,String>(1.0, 40, new ProperNameFeatureExtractor(nameDict, wordDict));
       classifier = factory.trainClassifier(trainingData);
     } else if (model.equalsIgnoreCase("perceptron")) {
-    	ProbabilisticClassifierFactory<String,String> factory = new PerceptronClassifier.Factory<String,String,String>(new ProperNameFeatureExtractor());
+    	ProbabilisticClassifierFactory<String,String> factory = new PerceptronClassifier.Factory<String,String,String>(new ProperNameFeatureExtractor(nameDict, wordDict));
     	classifier = factory.trainClassifier(trainingData);
     } else {
       throw new RuntimeException("Unknown model descriptor: " + model);
